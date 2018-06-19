@@ -17,10 +17,10 @@ package io.gravitee.management.services.sync;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.gravitee.common.component.Lifecycle;
-import io.gravitee.management.model.ApiEntity;
-import io.gravitee.repository.exceptions.TechnicalException;
+import io.gravitee.management.model.api.ApiEntity;
 import io.gravitee.repository.management.api.ApiRepository;
 import io.gravitee.repository.management.api.EventRepository;
+import io.gravitee.repository.management.api.search.ApiFieldExclusionFilter;
 import io.gravitee.repository.management.api.search.EventCriteria;
 import io.gravitee.repository.management.api.search.builder.PageableBuilder;
 import io.gravitee.repository.management.model.Api;
@@ -62,68 +62,65 @@ public class SyncManager {
     public void refresh() {
         logger.debug("Refreshing state...");
 
-        try {
-            // Extract all registered APIs
-            Map<String, io.gravitee.repository.management.model.Api> apis = apiRepository.findAll()
-                    .stream()
-                    .collect(Collectors.toMap(io.gravitee.repository.management.model.Api::getId, api -> api));
+        // Extract all registered APIs
+        Map<String, io.gravitee.repository.management.model.Api> apis = apiRepository.search(null,
+                new ApiFieldExclusionFilter.Builder().excludeDefinition(true).build())
+                .stream()
+                .collect(Collectors.toMap(io.gravitee.repository.management.model.Api::getId, api -> api));
 
-            // Get last event for each API
-            Map<String, Event> events = new HashMap<>();
-            apis.keySet().forEach(api -> {
-                Event event = getLastEvent(api);
-                events.put(api, event);
-            });
+        // Get last event for each API
+        Map<String, Event> events = new HashMap<>();
+        apis.keySet().forEach(api -> {
+            Event event = getLastEvent(api);
+            events.put(api, event);
+        });
 
-            // Determine API which must be stopped and stop them
-            events.entrySet()
-                    .stream()
-                    .filter(apiEvent -> {
-                        Event event = apiEvent.getValue();
-                        return event != null &&
-                                (event.getType() == EventType.STOP_API || event.getType() == EventType.UNPUBLISH_API);
-                    })
-                    .forEach(apiEvent -> apiManager.undeploy(apiEvent.getKey()));
+        // Determine API which must be stopped and stop them
+        events.entrySet()
+                .stream()
+                .filter(apiEvent -> {
+                    Event event = apiEvent.getValue();
+                    return event != null &&
+                            (event.getType() == EventType.STOP_API || event.getType() == EventType.UNPUBLISH_API);
+                })
+                .forEach(apiEvent -> apiManager.undeploy(apiEvent.getKey()));
 
-            // Determine API which must be deployed
-            events.entrySet()
-                    .stream()
-                    .filter(apiEvent -> {
-                        Event event = apiEvent.getValue();
-                        return event != null && (
-                                event.getType() == EventType.START_API || event.getType() == EventType.PUBLISH_API);
-                    })
-                    .forEach(apiEvent -> {
-                        try {
-                            // Read API definition from event
-                            io.gravitee.repository.management.model.Api payloadApi = objectMapper.readValue(
-                                    apiEvent.getValue().getPayload(), io.gravitee.repository.management.model.Api.class);
+        // Determine API which must be deployed
+        events.entrySet()
+                .stream()
+                .filter(apiEvent -> {
+                    Event event = apiEvent.getValue();
+                    return event != null && (
+                            event.getType() == EventType.START_API || event.getType() == EventType.PUBLISH_API);
+                })
+                .forEach(apiEvent -> {
+                    try {
+                        // Read API definition from event
+                        io.gravitee.repository.management.model.Api payloadApi = objectMapper.readValue(
+                                apiEvent.getValue().getPayload(), io.gravitee.repository.management.model.Api.class);
 
-                            // API to deploy
-                            ApiEntity apiToDeploy = convert(payloadApi);
+                        // API to deploy
+                        ApiEntity apiToDeploy = convert(payloadApi);
 
-                            if (apiToDeploy != null) {
-                                // Get deployed API
-                                ApiEntity deployedApi = apiManager.get(apiToDeploy.getId());
+                        if (apiToDeploy != null) {
+                            // Get deployed API
+                            ApiEntity deployedApi = apiManager.get(apiToDeploy.getId());
 
-                                // API is not yet deployed, so let's do it !
-                                if (deployedApi == null) {
-                                    apiManager.deploy(apiToDeploy);
-                                } else {
-                                    if (deployedApi.getDeployedAt().before(apiToDeploy.getDeployedAt())) {
-                                        apiManager.update(apiToDeploy);
-                                    }
+                            // API is not yet deployed, so let's do it !
+                            if (deployedApi == null) {
+                                apiManager.deploy(apiToDeploy);
+                            } else {
+                                if (deployedApi.getDeployedAt().before(apiToDeploy.getDeployedAt())) {
+                                    apiManager.update(apiToDeploy);
                                 }
                             }
-                        } catch (IOException ioe) {
-                            logger.error("Error while determining deployed APIs store into events payload", ioe);
                         }
-                    });
+                    } catch (IOException ioe) {
+                        logger.error("Error while determining deployed APIs store into events payload", ioe);
+                    }
+                });
 
-            lastRefreshAt = System.currentTimeMillis();
-        } catch (TechnicalException te) {
-            logger.error("Unable to sync instance", te);
-        }
+        lastRefreshAt = System.currentTimeMillis();
     }
 
     private Event getLastEvent(String api) {

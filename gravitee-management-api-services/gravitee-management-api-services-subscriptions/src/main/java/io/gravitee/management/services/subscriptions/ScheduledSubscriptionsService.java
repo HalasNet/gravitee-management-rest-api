@@ -16,7 +16,7 @@
 package io.gravitee.management.services.subscriptions;
 
 import io.gravitee.common.service.AbstractService;
-import io.gravitee.management.model.ApiEntity;
+import io.gravitee.management.model.api.ApiEntity;
 import io.gravitee.management.model.SubscriptionEntity;
 import io.gravitee.management.model.SubscriptionStatus;
 import io.gravitee.management.model.subscription.SubscriptionQuery;
