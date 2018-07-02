@@ -619,7 +619,7 @@ public class ApiServiceImpl extends TransactionalService implements ApiService {
 
                 // And create event
                 eventService.create(eventType, objectMapper.writeValueAsString(lastPublishedAPI), properties);
-                return convert(Collections.singleton(lastPublishedAPI), true).iterator().next();
+                return convert(Collections.singleton(apiRepository.update(lastPublishedAPI)), true).iterator().next();
             } else {
                 if (events.size() == 0) {
                     // this is the first time we start the api without previously deployed id.
@@ -981,7 +981,7 @@ public class ApiServiceImpl extends TransactionalService implements ApiService {
             Api previousApi = new Api(api);
             api.setUpdatedAt(new Date());
             api.setLifecycleState(lifecycleState);
-            final ApiEntity apiEntity = convert(apiRepository.update(api));
+            ApiEntity apiEntity = convert(apiRepository.update(api));
             // Audit
             auditService.createApiAuditLog(
                     apiId,
@@ -993,10 +993,10 @@ public class ApiServiceImpl extends TransactionalService implements ApiService {
 
             switch (lifecycleState) {
                 case STARTED:
-                    deployLastPublishedAPI(apiId, username, EventType.START_API);
+                    apiEntity = deployLastPublishedAPI(apiId, username, EventType.START_API);
                     break;
                 case STOPPED:
-                    deployLastPublishedAPI(apiId, username, EventType.STOP_API);
+                    apiEntity = deployLastPublishedAPI(apiId, username, EventType.STOP_API);
                     break;
                 default:
                     break;
