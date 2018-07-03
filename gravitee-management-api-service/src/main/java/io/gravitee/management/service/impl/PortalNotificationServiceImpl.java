@@ -69,24 +69,28 @@ public class PortalNotificationServiceImpl extends AbstractService implements Po
 
     @Override
     public void create(Hook hook, List<String> users, Object params) {
+        // get notification template
+        final Map<String, String> load = getNotificationByHook(hook, params);
+
+        List<NewPortalNotificationEntity> notifications = new ArrayList<>(users.size());
+        users.forEach(user -> {
+            NewPortalNotificationEntity notification = new NewPortalNotificationEntity();
+            notification.setUser(user);
+            notification.setTitle(load.get("title"));
+            notification.setMessage(load.get("message"));
+            notifications.add(notification);
+        });
+
+        create(notifications);
+    }
+
+    public Map<String, String> getNotificationByHook(Hook hook, Object params) {
         try {
-            // get notification template
             String tpl = RELATIVE_TPL_PATH + hook.getScope().name() + "." + hook.name() + ".yml";
             final Template template = freemarkerConfiguration.getTemplate(tpl);
             final String yamlContent = processTemplateIntoString(template, params);
             Yaml yaml = new Yaml();
-            Map<String, String> load = yaml.loadAs(yamlContent, HashMap.class);
-
-            List<NewPortalNotificationEntity> notifications = new ArrayList<>(users.size());
-            users.forEach(user -> {
-                NewPortalNotificationEntity notification = new NewPortalNotificationEntity();
-                notification.setUser(user);
-                notification.setTitle(load.get("title"));
-                notification.setMessage(load.get("message"));
-                notifications.add(notification);
-            });
-
-            create(notifications);
+            return yaml.loadAs(yamlContent, HashMap.class);
         } catch (final Exception ex) {
             LOGGER.error("Error while sending notification", ex);
             throw new TechnicalManagementException("Error while sending notification", ex);

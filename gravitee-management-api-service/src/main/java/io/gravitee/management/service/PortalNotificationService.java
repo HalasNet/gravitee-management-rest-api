@@ -19,6 +19,7 @@ import io.gravitee.management.model.notification.PortalNotificationEntity;
 import io.gravitee.management.service.notification.Hook;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Nicolas GERAUD (nicolas.geraud at graviteesource.com)
@@ -33,4 +34,6 @@ public interface PortalNotificationService {
     void delete(String notificationId);
 
     void deleteAll(String user);
+
+    Map<String, String> getNotificationByHook(Hook hook, Object params);
 }
